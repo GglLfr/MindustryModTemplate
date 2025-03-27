@@ -20,7 +20,7 @@ buildscript{
 
 plugins{
     java
-    id("com.github.GlennFolker.EntityAnno") apply false
+    id("com.github.GglLfr.EntityAnno") apply false
 }
 
 val arcVersion: String by project
@@ -49,7 +49,7 @@ fun mindustry(module: String): String{
 }
 
 fun entity(module: String): String{
-    return "com.github.GlennFolker.EntityAnno$module:$entVersion"
+    return "com.github.GglLfr.EntityAnno$module:$entVersion"
 }
 
 allprojects{
@@ -77,7 +77,7 @@ allprojects{
         mavenCentral()
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
         maven("https://oss.sonatype.org/content/repositories/releases/")
-        maven("https://raw.githubusercontent.com/GlennFolker/EntityAnnoMaven/main")
+        maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
 
         // Use Zelaux's non-buggy repository for release Mindustry and Arc builds.
         if(!useJitpack) maven("https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository")
@@ -98,7 +98,7 @@ allprojects{
 }
 
 project(":"){
-    apply(plugin = "com.github.GlennFolker.EntityAnno")
+    apply(plugin = "com.github.GglLfr.EntityAnno")
     configure<EntityAnnoExtension>{
         modName = project.properties["modName"].toString()
         mindustryVersion = project.properties[if(useJitpack) "mindustryBEVersion" else "mindustryVersion"].toString()
