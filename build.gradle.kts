@@ -5,8 +5,8 @@ import ent.*
 import java.io.*
 
 buildscript{
-    val arcVersion: String by project
-    val useJitpack = property("mindustryBE").toString().toBooleanStrict()
+    val arcVersion: String = providers.gradleProperty("arcVersion").get()
+    val useJitpack = providers.gradleProperty("mindustryBE").get().toBooleanStrict()
 
     dependencies{
         classpath("com.github.Anuken.Arc:arc-core:$arcVersion")
@@ -23,22 +23,22 @@ plugins{
     id("com.github.GglLfr.EntityAnno") apply false
 }
 
-val arcVersion: String by project
-val mindustryVersion: String by project
-val mindustryBEVersion: String by project
-val entVersion: String by project
+val arcVersion: String = providers.gradleProperty("arcVersion").get()
+val mindustryVersion: String = providers.gradleProperty("mindustryVersion").get()
+val mindustryBEVersion: String = providers.gradleProperty("mindustryBEVersion").get()
+val entVersion: String = providers.gradleProperty("entVersion").get()
 
-val modName: String by project
-val modArtifact: String by project
-val modFetch: String by project
-val modGenSrc: String by project
-val modGen: String by project
+val modName: String = providers.gradleProperty("modName").get()
+val modArtifact: String = providers.gradleProperty("modArtifact").get()
+val modFetch: String = providers.gradleProperty("modFetch").get()
+val modGenSrc: String = providers.gradleProperty("modGenSrc").get()
+val modGen: String = providers.gradleProperty("modGen").get()
 
-val androidSdkVersion: String by project
-val androidBuildVersion: String by project
-val androidMinVersion: String by project
+val androidSdkVersion: String = providers.gradleProperty("androidSdkVersion").get()
+val androidBuildVersion: String = providers.gradleProperty("androidBuildVersion").get()
+val androidMinVersion: String = providers.gradleProperty("androidMinVersion").get()
 
-val useJitpack = property("mindustryBE").toString().toBooleanStrict()
+val useJitpack = providers.gradleProperty("mindustryBE").get().toBooleanStrict()
 
 fun arc(module: String): String{
     return "com.github.Anuken.Arc$module:$arcVersion"
@@ -62,19 +62,19 @@ allprojects{
             if(useJitpack && requested.group == "com.github.Anuken.Mindustry"){
                 useTarget("com.github.Anuken.MindustryJitpack:${requested.module.name}:$mindustryBEVersion")
             }else if(requested.group == "com.github.Anuken.Arc"){
-                useVersion(arcVersion)
+                if(useJitpack){
+                    useVersion(arcVersion)
+                }else{
+                    useVersion(mindustryVersion)
+                }
             }
         }
-    }
-
-    dependencies{
-        // Downgrade Java 9+ syntax into being available in Java 8.
-        annotationProcessor(entity(":downgrader"))
     }
 
     repositories{
         // Necessary Maven repositories to pull dependencies from.
         mavenCentral()
+        mavenLocal()
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
         maven("https://oss.sonatype.org/content/repositories/releases/")
         maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
@@ -85,23 +85,29 @@ allprojects{
     }
 
     tasks.withType<JavaCompile>().configureEach{
-        // Use Java 17+ syntax, but target Java 8 bytecode version.
-        sourceCompatibility = "17"
         options.apply{
-            release = 8
             compilerArgs.add("-Xlint:-options")
+            compilerArgs.addAll(providers.gradleProperty("org.gradle.jvmargs").get()
+                .split(Regex("\\s+"))
+                .filter{it.startsWith("--add-opens")}
+                .map{"--add-exports=${it.substring("--add-opens=".length)}"}
+            )
 
             isIncremental = true
+            isFork = false
             encoding = "UTF-8"
         }
+
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
 }
 
 project(":"){
     apply(plugin = "com.github.GglLfr.EntityAnno")
     configure<EntityAnnoExtension>{
-        modName = project.properties["modName"].toString()
-        mindustryVersion = project.properties[if(useJitpack) "mindustryBEVersion" else "mindustryVersion"].toString()
+        modName = providers.gradleProperty("modName").get()
+        mindustryVersion = providers.gradleProperty(if(useJitpack) "mindustryBEVersion" else "mindustryVersion").get()
         isJitpack = useJitpack
         revisionDir = layout.projectDirectory.dir("revisions").asFile
         fetchPackage = modFetch
@@ -122,6 +128,24 @@ project(":"){
         archiveFileName = "${modArtifact}Desktop.jar"
 
         val meta = layout.projectDirectory.file("$temporaryDir/mod.json")
+
+        // Deliberately check if the mod meta is actually written in HJSON, since, well, some people actually use
+        // it. But this is also not mentioned in the `README.md`, for the mischievous reason of driving beginners
+        // into using JSON instead.
+        val metaJson = layout.projectDirectory.file("mod.json")
+        val metaHjson = layout.projectDirectory.file("mod.hjson")
+        val capturedModName = modName
+
+        if(metaJson.asFile.exists() && metaHjson.asFile.exists()){
+            throw IllegalStateException("Ambiguous mod meta: both `mod.json` and `mod.hjson` exist.")
+        }else if(!metaJson.asFile.exists() && !metaHjson.asFile.exists()){
+            throw IllegalStateException("Missing mod meta: neither `mod.json` nor `mod.hjson` exist.")
+        }
+
+        val isJson = metaJson.asFile.exists()
+        val usedMeta = if(isJson) metaJson else metaHjson
+        inputs.files(usedMeta)
+
         from(
             files(sourceSets["main"].output.classesDirs),
             files(sourceSets["main"].output.resourcesDir),
@@ -134,24 +158,12 @@ project(":"){
 
         metaInf.from(layout.projectDirectory.file("LICENSE"))
         doFirst{
-            // Deliberately check if the mod meta is actually written in HJSON, since, well, some people actually use
-            // it. But this is also not mentioned in the `README.md`, for the mischievous reason of driving beginners
-            // into using JSON instead.
-            val metaJson = layout.projectDirectory.file("mod.json")
-            val metaHjson = layout.projectDirectory.file("mod.hjson")
 
-            if(metaJson.asFile.exists() && metaHjson.asFile.exists()){
-                throw IllegalStateException("Ambiguous mod meta: both `mod.json` and `mod.hjson` exist.")
-            }else if(!metaJson.asFile.exists() && !metaHjson.asFile.exists()){
-                throw IllegalStateException("Missing mod meta: neither `mod.json` nor `mod.hjson` exist.")
-            }
-
-            val isJson = metaJson.asFile.exists()
-            val map = (if(isJson) metaJson else metaHjson).asFile
+            val map = usedMeta.asFile
                 .reader(Charsets.UTF_8)
                 .use{Jval.read(it)}
 
-            map.put("name", modName)
+            map.put("name", capturedModName)
             meta.asFile.writer(Charsets.UTF_8).use{file -> BufferedWriter(file).use{map.writeTo(it, Jval.Jformat.formatted)}}
         }
     }
