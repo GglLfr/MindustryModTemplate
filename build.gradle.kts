@@ -81,7 +81,7 @@ allprojects{
         maven("https://oss.sonatype.org/content/repositories/releases/")
         maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
 
-        // Use Ivy repository Mindustry and Arc builds.
+        // Use Ivy repository for Mindustry builds.
         ivy{
             url = uri("https://github.com")
             patternLayout{
