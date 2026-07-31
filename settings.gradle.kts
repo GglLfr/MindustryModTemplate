@@ -6,7 +6,7 @@ pluginManagement{
     }
 
     plugins{
-        val entVersion: String = providers.gradleProperty("entVersion").get()
+        val entVersion = providers.gradleProperty("entVersion").get()
         id("com.github.GglLfr.EntityAnno") version(entVersion)
     }
 }
@@ -15,5 +15,5 @@ if(JavaVersion.current().ordinal < JavaVersion.VERSION_17.ordinal){
     throw IllegalStateException("JDK 17 is a required minimum version. Yours: ${System.getProperty("java.version")}")
 }
 
-val modName: String = providers.gradleProperty("modName").get()
+val modName = providers.gradleProperty("modName").get()
 rootProject.name = modName
