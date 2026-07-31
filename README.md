@@ -127,7 +127,7 @@ Before going into using this template, be aware that a fair amount of Java knowl
    -     "description": "Mindustry Java mod template, complete with EntityAnno and syntax downgrader integration.",
    +     "description": "Dive into the past of a trauma-driven uprising.",
          "version": "1.0",
-         "minGameVersion": "146",
+         "minGameVersion": "159.7",
          "author": "You",
          "java": true,
    -     "main": "template.ModTemplate"
