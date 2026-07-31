@@ -177,37 +177,34 @@ project(":"){
 
         from(zipTree(desktopJar), zipTree(dexJar))
         doFirst{
-            logger.lifecycle("Running `d8`.")
-            providers.exec{
-                // Find Android SDK root.
-                val sdkRoot = File(
-                    OS.env("ANDROID_SDK_ROOT") ?: OS.env("ANDROID_HOME") ?:
-                    throw IllegalStateException("Neither `ANDROID_SDK_ROOT` nor `ANDROID_HOME` is set.")
-                )
-    
-                // Find `d8`.
-                val d8 = File(sdkRoot, "build-tools/$androidBuildVersion/${if(OS.isWindows) "d8.bat" else "d8"}")
-                if(!d8.exists()) throw IllegalStateException("Android SDK `build-tools;$androidBuildVersion` isn't installed or is corrupted")
-    
-                // Initialize a release build.
-                val input = desktopJar.get().asFile
-                val command = arrayListOf("$d8", "--release", "--min-api", androidMinVersion, "--output", "$dexJar", "$input")
-    
-                // Include all compile and runtime classpath.
-                (configurations.compileClasspath.get().toList() + configurations.runtimeClasspath.get().toList()).forEach{
-                    if(it.exists()) command.addAll(arrayOf("--classpath", it.path))
-                }
-    
-                // Include Android platform as library.
-                val androidJar = File(sdkRoot, "platforms/android-$androidSdkVersion/android.jar")
-                if(!androidJar.exists()) throw IllegalStateException("Android SDK `platforms;android-$androidSdkVersion` isn't installed or is corrupted")
-    
-                command.addAll(arrayOf("--lib", "$androidJar"))
-                if(OS.isWindows) command.addAll(0, arrayOf("cmd", "/c").toList())
-    
-                // Run `d8`.
-                commandLine(command)
-            }.result.get().rethrowFailure()
+            // Find Android SDK root.
+            val sdkRoot = File(
+                OS.env("ANDROID_SDK_ROOT") ?: OS.env("ANDROID_HOME") ?:
+                throw IllegalStateException("Neither `ANDROID_SDK_ROOT` nor `ANDROID_HOME` is set.")
+            )
+
+            // Find `d8`.
+            val d8 = File(sdkRoot, "build-tools/$androidBuildVersion/${if(OS.isWindows) "d8.bat" else "d8"}")
+            if(!d8.exists()) throw IllegalStateException("Android SDK `build-tools;$androidBuildVersion` isn't installed or is corrupted")
+
+            // Initialize a release build.
+            val input = desktopJar.get().asFile
+            val command = arrayListOf("$d8", "--release", "--min-api", androidMinVersion, "--output", "$dexJar", "$input")
+
+            // Include all compile and runtime classpath.
+            (configurations.compileClasspath.get().toList() + configurations.runtimeClasspath.get().toList()).forEach{
+                if(it.exists()) command.addAll(arrayOf("--classpath", it.path))
+            }
+
+            // Include Android platform as library.
+            val androidJar = File(sdkRoot, "platforms/android-$androidSdkVersion/android.jar")
+            if(!androidJar.exists()) throw IllegalStateException("Android SDK `platforms;android-$androidSdkVersion` isn't installed or is corrupted")
+
+            command.addAll(arrayOf("--lib", "$androidJar"))
+            if(OS.isWindows) command.addAll(0, arrayOf("cmd", "/c").toList())
+
+            // Run `d8`.
+            project.providers.exec{commandLine(command)}.result.get().rethrowFailure()
         }
     }
 
