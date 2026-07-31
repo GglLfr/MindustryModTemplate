@@ -172,12 +172,12 @@ Desktop builds are convenient for testing, but will obviously **not** work on An
 Android builds are automated on the CI hosted by GitHub Actions, so you should be able to just push a commit and wait for the CI to provide your build. If you still want to build locally, though, follow these steps.
 
 #### Installing Android SDK
-1. Install [Android SDK](https://developer.android.com/studio#command-line-tools-only), specifically the "**Command line tools only**" section. Download the tools that match your platform.
+1. Install [Android SDK](https://developer.android.com/studio#command-line-tools-only), specifically the "**Command line tools only**" section. Download the tools that match your platform. Alternatively on Linux, the package `sdkmanager` is also usable if available in your distro's package manager; in that case, skip to step 5.
 2. Unzip the Android SDK command line tools inside a folder; let's call it `AndroidSDK/` for now.
 3. Inside this folder is a folder named `cmdline-tools/`. Put everything inside `cmdline-tools/` to a new folder named `latest/`, so that the folder structure looks like `AndroidSDK/cmdline-tools/latest/`.
 4. Open your terminal, `cd` to the `latest/` folder.
-5. Run `sdkmanager --install "platforms;android-35" "build-tools;35.0.0"`. These versions correspond to the `androidSdkVersion` and `androidBuildVersion` properties inside `gradle.properties`, which default to `35` and `35.0.0`, respectively.
-6. Set environment variable `ANDROID_SDK_ROOT` as the full path to the `AndroidSDK/` folder you created, and restart your terminal to update the environments.
+5. Run `sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"`. These versions correspond to the `androidSdkVersion` and `androidBuildVersion` properties inside `gradle.properties`, which default to `37.0` and `37.0.0`, respectively.
+6. Set environment variable `ANDROID_HOME` as the full path to the `AndroidSDK/` folder you created, and restart your terminal to update the environments.
 
 #### Building
 1. Open your terminal, and `cd` to your local copy of the mod.
