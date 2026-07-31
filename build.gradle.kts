@@ -5,7 +5,7 @@ import ent.*
 import java.io.*
 
 buildscript{
-    val mindustryVersion: String = providers.gradleProperty("mindustryVersion").get()
+    val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
 
     dependencies{
         classpath("com.github.Anuken.Mindustry:core:$mindustryVersion")
@@ -43,14 +43,14 @@ plugins{
     id("com.github.GglLfr.EntityAnno") apply false
 }
 
-val mindustryVersion: String = providers.gradleProperty("mindustryVersion").get()
-val entVersion: String = providers.gradleProperty("entVersion").get()
+val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
+val entVersion = providers.gradleProperty("entVersion").get()
 
-val modName: String = providers.gradleProperty("modName").get()
-val modArtifact: String = providers.gradleProperty("modArtifact").get()
-val modFetch: String = providers.gradleProperty("modFetch").get()
-val modGenSrc: String = providers.gradleProperty("modGenSrc").get()
-val modGen: String = providers.gradleProperty("modGen").get()
+val modName = providers.gradleProperty("modName").get()
+val modArtifact = providers.gradleProperty("modArtifact").get()
+val modFetch = providers.gradleProperty("modFetch").get()
+val modGenSrc = providers.gradleProperty("modGenSrc").get()
+val modGen = providers.gradleProperty("modGen").get()
 
 fun mindustry(module: String): String{
     return "com.github.Anuken.Mindustry$module:$mindustryVersion"
@@ -190,9 +190,9 @@ project(":"){
         val desktopJar = jar.flatMap{it.archiveFile}
         val dexJar = File(temporaryDir, "Dex.jar")
 
-        val androidSdkVersion: String = providers.gradleProperty("androidSdkVersion").get()
-        val androidBuildVersion: String = providers.gradleProperty("androidBuildVersion").get()
-        val androidMinVersion: String = providers.gradleProperty("androidMinVersion").get()
+        val androidSdkVersion = providers.gradleProperty("androidSdkVersion").get()
+        val androidBuildVersion = providers.gradleProperty("androidBuildVersion").get()
+        val androidMinVersion = providers.gradleProperty("androidMinVersion").get()
 
         val classpaths = configurations.compileClasspath.get().toList() + configurations.runtimeClasspath.get().toList()
         val providers = project.providers
