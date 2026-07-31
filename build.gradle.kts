@@ -34,10 +34,6 @@ val modFetch: String = providers.gradleProperty("modFetch").get()
 val modGenSrc: String = providers.gradleProperty("modGenSrc").get()
 val modGen: String = providers.gradleProperty("modGen").get()
 
-val androidSdkVersion: String = providers.gradleProperty("androidSdkVersion").get()
-val androidBuildVersion: String = providers.gradleProperty("androidBuildVersion").get()
-val androidMinVersion: String = providers.gradleProperty("androidMinVersion").get()
-
 val useJitpack = providers.gradleProperty("mindustryBE").get().toBooleanStrict()
 
 fun arc(module: String): String{
@@ -175,6 +171,13 @@ project(":"){
         val desktopJar = jar.flatMap{it.archiveFile}
         val dexJar = File(temporaryDir, "Dex.jar")
 
+        val androidSdkVersion: String = providers.gradleProperty("androidSdkVersion").get()
+        val androidBuildVersion: String = providers.gradleProperty("androidBuildVersion").get()
+        val androidMinVersion: String = providers.gradleProperty("androidMinVersion").get()
+
+        val classpaths = configurations.compileClasspath.get().toList() + configurations.runtimeClasspath.get().toList()
+        val providers = project.providers
+
         from(zipTree(desktopJar), zipTree(dexJar))
         doFirst{
             // Find Android SDK root.
@@ -192,7 +195,7 @@ project(":"){
             val command = arrayListOf("$d8", "--release", "--min-api", androidMinVersion, "--output", "$dexJar", "$input")
 
             // Include all compile and runtime classpath.
-            (configurations.compileClasspath.get().toList() + configurations.runtimeClasspath.get().toList()).forEach{
+            classpaths.forEach{
                 if(it.exists()) command.addAll(arrayOf("--classpath", it.path))
             }
 
@@ -204,7 +207,7 @@ project(":"){
             if(OS.isWindows) command.addAll(0, arrayOf("cmd", "/c").toList())
 
             // Run `d8`.
-            project.providers.exec{commandLine(command)}.result.get().rethrowFailure()
+            providers.exec{commandLine(command)}.result.get().rethrowFailure()
         }
     }
 
