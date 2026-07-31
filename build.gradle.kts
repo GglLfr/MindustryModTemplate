@@ -5,16 +5,36 @@ import ent.*
 import java.io.*
 
 buildscript{
-    val arcVersion: String = providers.gradleProperty("arcVersion").get()
-    val useJitpack = providers.gradleProperty("mindustryBE").get().toBooleanStrict()
+    val mindustryVersion: String = providers.gradleProperty("mindustryVersion").get()
 
     dependencies{
-        classpath("com.github.Anuken.Arc:arc-core:$arcVersion")
+        classpath("com.github.Anuken.Mindustry:core:$mindustryVersion")
+    }
+
+    configurations.configureEach{
+        // Resolve the correct Mindustry dependency.
+        resolutionStrategy.eachDependency{
+            if(requested.group == "com.github.Anuken.Mindustry"){
+                useVersion(mindustryVersion)
+            }
+        }
     }
 
     repositories{
-        if(!useJitpack) maven("https://maven.xpdustry.com/mindustry")
-        maven("https://jitpack.io")
+        ivy{
+            url = uri("https://github.com")
+            patternLayout{
+                artifact(when(mindustryVersion){
+                    "latest" -> "Anuken/Mindustry/releases/latest/download/dependencies.jar"
+                    "be" -> "Anuken/MindustryBuilds/releases/download/master/latest.jar"
+                    else -> "Anuken/Mindustry/releases/download/[revision]/dependencies.jar"
+                })
+                metadataSources{artifact()}
+            }
+            content{
+                includeVersion("com.github.Anuken.Mindustry", "core", mindustryVersion)
+            }
+        }
     }
 }
 
@@ -23,9 +43,7 @@ plugins{
     id("com.github.GglLfr.EntityAnno") apply false
 }
 
-val arcVersion: String = providers.gradleProperty("arcVersion").get()
 val mindustryVersion: String = providers.gradleProperty("mindustryVersion").get()
-val mindustryBEVersion: String = providers.gradleProperty("mindustryBEVersion").get()
 val entVersion: String = providers.gradleProperty("entVersion").get()
 
 val modName: String = providers.gradleProperty("modName").get()
@@ -33,12 +51,6 @@ val modArtifact: String = providers.gradleProperty("modArtifact").get()
 val modFetch: String = providers.gradleProperty("modFetch").get()
 val modGenSrc: String = providers.gradleProperty("modGenSrc").get()
 val modGen: String = providers.gradleProperty("modGen").get()
-
-val useJitpack = providers.gradleProperty("mindustryBE").get().toBooleanStrict()
-
-fun arc(module: String): String{
-    return "com.github.Anuken.Arc$module:$arcVersion"
-}
 
 fun mindustry(module: String): String{
     return "com.github.Anuken.Mindustry$module:$mindustryVersion"
@@ -53,31 +65,37 @@ allprojects{
     sourceSets["main"].java.setSrcDirs(listOf(layout.projectDirectory.dir("src")))
 
     configurations.configureEach{
-        // Resolve the correct Mindustry dependency, and force Arc version.
+        // Resolve the correct Mindustry dependency.
         resolutionStrategy.eachDependency{
-            if(useJitpack && requested.group == "com.github.Anuken.Mindustry"){
-                useTarget("com.github.Anuken.MindustryJitpack:${requested.module.name}:$mindustryBEVersion")
-            }else if(requested.group == "com.github.Anuken.Arc"){
-                if(useJitpack){
-                    useVersion(arcVersion)
-                }else{
-                    useVersion(mindustryVersion)
-                }
+            if(requested.group == "com.github.Anuken.Mindustry"){
+                useVersion(mindustryVersion)
             }
         }
     }
 
     repositories{
         // Necessary Maven repositories to pull dependencies from.
-        mavenCentral()
         mavenLocal()
+        mavenCentral()
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
         maven("https://oss.sonatype.org/content/repositories/releases/")
         maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
 
-        // Use xpdustry's non-buggy repository for release Mindustry and Arc builds.
-        if(!useJitpack) maven("https://maven.xpdustry.com/mindustry")
-        maven("https://jitpack.io")
+        // Use Ivy repository Mindustry and Arc builds.
+        ivy{
+            url = uri("https://github.com")
+            patternLayout{
+                artifact(when(mindustryVersion){
+                    "latest" -> "Anuken/Mindustry/releases/latest/download/dependencies.jar"
+                    "be" -> "Anuken/MindustryBuilds/releases/download/master/latest.jar"
+                    else -> "Anuken/Mindustry/releases/download/[revision]/dependencies.jar"
+                })
+                metadataSources{artifact()}
+            }
+            content{
+                includeVersion("com.github.Anuken.Mindustry", "core", mindustryVersion)
+            }
+        }
     }
 
     tasks.withType<JavaCompile>().configureEach{
@@ -101,10 +119,12 @@ allprojects{
 
 project(":"){
     apply(plugin = "com.github.GglLfr.EntityAnno")
+
+    val localModName = modName
+    val localMindustryVersion = mindustryVersion
     configure<EntityAnnoExtension>{
-        modName = providers.gradleProperty("modName").get()
-        mindustryVersion = providers.gradleProperty(if(useJitpack) "mindustryBEVersion" else "mindustryVersion").get()
-        isJitpack = useJitpack
+        modName = localModName
+        mindustryVersion = localMindustryVersion
         revisionDir = layout.projectDirectory.dir("revisions").asFile
         fetchPackage = modFetch
         genSrcPackage = modGenSrc
@@ -117,7 +137,6 @@ project(":"){
         add("kapt", entity(":entity"))
 
         compileOnly(mindustry(":core"))
-        compileOnly(arc(":arc-core"))
     }
 
     val jar = tasks.named<Jar>("jar"){
@@ -130,7 +149,7 @@ project(":"){
         // into using JSON instead.
         val metaJson = layout.projectDirectory.file("mod.json")
         val metaHjson = layout.projectDirectory.file("mod.hjson")
-        val capturedModName = modName
+        val localModName = modName
 
         if(metaJson.asFile.exists() && metaHjson.asFile.exists()){
             throw IllegalStateException("Ambiguous mod meta: both `mod.json` and `mod.hjson` exist.")
@@ -159,7 +178,7 @@ project(":"){
                 .reader(Charsets.UTF_8)
                 .use{Jval.read(it)}
 
-            map.put("name", capturedModName)
+            map.put("name", localModName)
             meta.asFile.writer(Charsets.UTF_8).use{file -> BufferedWriter(file).use{map.writeTo(it, Jval.Jformat.formatted)}}
         }
     }

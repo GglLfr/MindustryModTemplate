@@ -1,8 +1,8 @@
 pluginManagement{
     repositories{
         gradlePluginPortal()
-        maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
         mavenLocal()
+        maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
     }
 
     plugins{
