@@ -101,6 +101,7 @@ allprojects{
     tasks.withType<JavaCompile>().configureEach{
         options.apply{
             compilerArgs.add("-Xlint:-options")
+            compilerArgs.add("-implicit:none")
             compilerArgs.addAll(providers.gradleProperty("org.gradle.jvmargs").get()
                 .split(Regex("\\s+"))
                 .filter{it.startsWith("--add-opens")}
