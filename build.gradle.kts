@@ -176,22 +176,6 @@ project(":"){
         compileOnly(mindustry())
     }
 
-    tasks.register("debugClasspath"){
-        val comp = configurations.getByName("compileClasspath").files
-        val kapt = configurations.getByName("kapt").files
-        doLast {
-            println("=== COMPILE CLASSPATH ===")
-            comp.forEach {
-                println("  -> ${it.absolutePath}")
-            }
-
-            println("=== KAPT CONFIGURATION ===")
-            kapt.forEach {
-                println("  -> ${it.absolutePath}")
-            }
-        }
-    }
-
     val jar = tasks.named<Jar>("jar"){
         archiveFileName = "${modArtifact}Desktop.jar"
 
