@@ -66,33 +66,31 @@ allprojects{
     sourceSets["main"].java.setSrcDirs(listOf(layout.projectDirectory.dir("src")))
 
     dependencies{
-        abstract class SplitMindustryArtifact : TransformAction<TransformParameters.None>{
+        abstract class TrimSources : TransformAction<TransformParameters.None>{
             @get:InputArtifact abstract val file: Provider<FileSystemLocation>
 
-            override fun transform(outputs: TransformOutputs) {
+            override fun transform(outputs: TransformOutputs){
                 val input = file.get().asFile
-                val classes = outputs.file("${input.nameWithoutExtension}-classes.jar")
-                val sources = outputs.file("${input.nameWithoutExtension}-sources.jar")
+                val classes = outputs.file(input.name)
 
                 JarFile(input).use{jar ->
                     val entries = jar.entries()
                     JarOutputStream(FileOutputStream(classes)).use{classes ->
-                        JarOutputStream(FileOutputStream(sources)).use{sources ->
-                            for(entry in entries){
-                                val target = if(entry.name.endsWith(".java")) sources else classes
-                                target.putNextEntry(JarEntry(entry.name))
-                                jar.getInputStream(entry).use{it.copyTo(target)}
-                                target.closeEntry()
-                            }
+                        for(entry in entries){
+                            if(entry.name.endsWith(".java")) continue
+
+                                classes.putNextEntry(JarEntry(entry.name))
+                                jar.getInputStream(entry).use{it.copyTo(classes)}
+                                classes.closeEntry()
                         }
                     }
                 }
             }
         }
 
-        registerTransform(SplitMindustryArtifact::class){
+        registerTransform(TrimSources::class){
             from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE)
-            to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-processed")
+            to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-stripped")
         }
     }
 
@@ -102,6 +100,12 @@ allprojects{
             if(requested.group == "com.github.Anuken"){
                 useVersion(mindustryVersion)
             }
+        }
+    }
+
+    configurations.matching{it.isCanBeResolved}.configureEach{
+        attributes{
+            attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-stripped")
         }
     }
 
@@ -135,9 +139,9 @@ allprojects{
             compilerArgs.add("-Xlint:-options")
             compilerArgs.add("-implicit:none")
             compilerArgs.addAll(providers.gradleProperty("org.gradle.jvmargs").get()
-                .split(Regex("\\s+"))
-                .filter{it.startsWith("--add-opens")}
-                .map{"--add-exports=${it.substring("--add-opens=".length)}"}
+            .split(Regex("\\s+"))
+            .filter{it.startsWith("--add-opens")}
+            .map{"--add-exports=${it.substring("--add-opens=".length)}"}
             )
 
             isIncremental = true
@@ -169,9 +173,21 @@ project(":"){
         compileOnly(entity(":entity"))
         add("kapt", entity(":entity"))
 
-        compileOnly(mindustry()){
-            attributes{
-                attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-processed")
+        compileOnly(mindustry())
+    }
+
+    tasks.register("debugClasspath"){
+        val comp = configurations.getByName("compileClasspath").files
+        val kapt = configurations.getByName("kapt").files
+        doLast {
+            println("=== COMPILE CLASSPATH ===")
+            comp.forEach {
+                println("  -> ${it.absolutePath}")
+            }
+
+            println("=== KAPT CONFIGURATION ===")
+            kapt.forEach {
+                println("  -> ${it.absolutePath}")
             }
         }
     }
@@ -200,20 +216,19 @@ project(":"){
 
         from(
             files(sourceSets["main"].output.classesDirs),
-            files(sourceSets["main"].output.resourcesDir),
-            configurations.runtimeClasspath.map{conf -> conf.map{if(it.isDirectory) it else zipTree(it)}},
+             files(sourceSets["main"].output.resourcesDir),
+             configurations.runtimeClasspath.map{conf -> conf.map{if(it.isDirectory) it else zipTree(it)}},
 
-            files(layout.projectDirectory.dir("assets")),
-            layout.projectDirectory.file("icon.png"),
-            meta
+             files(layout.projectDirectory.dir("assets")),
+             layout.projectDirectory.file("icon.png"),
+             meta
         )
 
         metaInf.from(layout.projectDirectory.file("LICENSE"))
         doFirst{
-
             val map = usedMeta.asFile
-                .reader(Charsets.UTF_8)
-                .use{Jval.read(it)}
+            .reader(Charsets.UTF_8)
+            .use{Jval.read(it)}
 
             map.put("name", localModName)
             meta.asFile.writer(Charsets.UTF_8).use{file -> BufferedWriter(file).use{map.writeTo(it, Jval.Jformat.formatted)}}
@@ -246,24 +261,24 @@ project(":"){
             val d8 = File(sdkRoot, "build-tools/$androidBuildVersion/${if(OS.isWindows) "d8.bat" else "d8"}")
             if(!d8.exists()) throw IllegalStateException("Android SDK `build-tools;$androidBuildVersion` isn't installed or is corrupted")
 
-            // Initialize a release build.
-            val input = desktopJar.get().asFile
-            val command = arrayListOf("$d8", "--release", "--min-api", androidMinVersion, "--output", "$dexJar", "$input")
+                // Initialize a release build.
+                val input = desktopJar.get().asFile
+                val command = arrayListOf("$d8", "--release", "--min-api", androidMinVersion, "--output", "$dexJar", "$input")
 
-            // Include all compile and runtime classpath.
-            classpaths.forEach{
-                if(it.exists()) command.addAll(arrayOf("--classpath", it.path))
-            }
+                // Include all compile and runtime classpath.
+                classpaths.forEach{
+                    if(it.exists()) command.addAll(arrayOf("--classpath", it.path))
+                }
 
-            // Include Android platform as library.
-            val androidJar = File(sdkRoot, "platforms/android-$androidSdkVersion/android.jar")
-            if(!androidJar.exists()) throw IllegalStateException("Android SDK `platforms;android-$androidSdkVersion` isn't installed or is corrupted")
+                // Include Android platform as library.
+                val androidJar = File(sdkRoot, "platforms/android-$androidSdkVersion/android.jar")
+                if(!androidJar.exists()) throw IllegalStateException("Android SDK `platforms;android-$androidSdkVersion` isn't installed or is corrupted")
 
-            command.addAll(arrayOf("--lib", "$androidJar"))
-            if(OS.isWindows) command.addAll(0, arrayOf("cmd", "/c").toList())
+                    command.addAll(arrayOf("--lib", "$androidJar"))
+                    if(OS.isWindows) command.addAll(0, arrayOf("cmd", "/c").toList())
 
-            // Run `d8`.
-            providers.exec{commandLine(command)}.result.get().rethrowFailure()
+                        // Run `d8`.
+                        providers.exec{commandLine(command)}.result.get().rethrowFailure()
         }
     }
 
