@@ -3,18 +3,19 @@ import arc.util.*
 import arc.util.serialization.*
 import ent.*
 import java.io.*
+import java.util.jar.*
 
 buildscript{
     val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
 
     dependencies{
-        classpath("com.github.Anuken.Mindustry:core:$mindustryVersion")
+        classpath("com.github.Anuken:Mindustry:$mindustryVersion")
     }
 
     configurations.configureEach{
         // Resolve the correct Mindustry dependency.
         resolutionStrategy.eachDependency{
-            if(requested.group == "com.github.Anuken.Mindustry"){
+            if(requested.group == "com.github.Anuken"){
                 useVersion(mindustryVersion)
             }
         }
@@ -32,7 +33,7 @@ buildscript{
                 metadataSources{artifact()}
             }
             content{
-                includeVersion("com.github.Anuken.Mindustry", "core", mindustryVersion)
+                includeVersion("com.github.Anuken", "Mindustry", mindustryVersion)
             }
         }
     }
@@ -52,8 +53,8 @@ val modFetch = providers.gradleProperty("modFetch").get()
 val modGenSrc = providers.gradleProperty("modGenSrc").get()
 val modGen = providers.gradleProperty("modGen").get()
 
-fun mindustry(module: String): String{
-    return "com.github.Anuken.Mindustry$module:$mindustryVersion"
+fun mindustry(): String{
+    return "com.github.Anuken:Mindustry:$mindustryVersion"
 }
 
 fun entity(module: String): String{
@@ -64,23 +65,47 @@ allprojects{
     apply(plugin = "java")
     sourceSets["main"].java.setSrcDirs(listOf(layout.projectDirectory.dir("src")))
 
+    dependencies{
+        abstract class SplitMindustryArtifact : TransformAction<TransformParameters.None>{
+            @get:InputArtifact abstract val file: Provider<FileSystemLocation>
+
+            override fun transform(outputs: TransformOutputs) {
+                val input = file.get().asFile
+                val classes = outputs.file("${input.nameWithoutExtension}-classes.jar")
+                val sources = outputs.file("${input.nameWithoutExtension}-sources.jar")
+
+                JarFile(input).use{jar ->
+                    val entries = jar.entries()
+                    JarOutputStream(FileOutputStream(classes)).use{classes ->
+                        JarOutputStream(FileOutputStream(sources)).use{sources ->
+                            for(entry in entries){
+                                val target = if(entry.name.endsWith(".java")) sources else classes
+                                target.putNextEntry(JarEntry(entry.name))
+                                jar.getInputStream(entry).use{it.copyTo(target)}
+                                target.closeEntry()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        registerTransform(SplitMindustryArtifact::class){
+            from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE)
+            to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-processed")
+        }
+    }
+
     configurations.configureEach{
         // Resolve the correct Mindustry dependency.
         resolutionStrategy.eachDependency{
-            if(requested.group == "com.github.Anuken.Mindustry"){
+            if(requested.group == "com.github.Anuken"){
                 useVersion(mindustryVersion)
             }
         }
     }
 
     repositories{
-        // Necessary Maven repositories to pull dependencies from.
-        mavenLocal()
-        mavenCentral()
-        maven("https://oss.sonatype.org/content/repositories/snapshots/")
-        maven("https://oss.sonatype.org/content/repositories/releases/")
-        maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
-
         // Use Ivy repository for Mindustry builds.
         ivy{
             url = uri("https://github.com")
@@ -93,9 +118,16 @@ allprojects{
                 metadataSources{artifact()}
             }
             content{
-                includeVersion("com.github.Anuken.Mindustry", "core", mindustryVersion)
+                includeVersion("com.github.Anuken", "Mindustry", mindustryVersion)
             }
         }
+
+        // Necessary Maven repositories to pull dependencies from.
+        mavenLocal()
+        mavenCentral()
+        maven("https://oss.sonatype.org/content/repositories/snapshots/")
+        maven("https://oss.sonatype.org/content/repositories/releases/")
+        maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
     }
 
     tasks.withType<JavaCompile>().configureEach{
@@ -137,7 +169,11 @@ project(":"){
         compileOnly(entity(":entity"))
         add("kapt", entity(":entity"))
 
-        compileOnly(mindustry(":core"))
+        compileOnly(mindustry()){
+            attributes{
+                attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-processed")
+            }
+        }
     }
 
     val jar = tasks.named<Jar>("jar"){
