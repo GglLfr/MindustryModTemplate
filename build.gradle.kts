@@ -2,7 +2,6 @@ import arc.files.Fi
 import arc.util.OS
 import arc.util.serialization.Jval
 import ent.EntityAnnoExtension
-import java.io.BufferedWriter
 import java.io.FileOutputStream
 import java.util.jar.JarEntry
 import java.util.jar.JarFile
@@ -185,14 +184,11 @@ project(":"){
     val jar = tasks.named<Jar>("jar"){
         archiveFileName = "${modArtifact}Desktop.jar"
 
-        val meta = layout.projectDirectory.file("$temporaryDir/mod.json")
-
         // Deliberately check if the mod meta is actually written in HJSON, since, well, some people actually use
         // it. But this is also not mentioned in the `README.md`, for the mischievous reason of driving beginners
         // into using JSON instead.
         val metaJson = layout.projectDirectory.file("mod.json")
         val metaHjson = layout.projectDirectory.file("mod.hjson")
-        val localModName = modName
 
         if(metaJson.asFile.exists() && metaHjson.asFile.exists()){
             throw IllegalStateException("Ambiguous mod meta: both `mod.json` and `mod.hjson` exist.")
@@ -202,7 +198,6 @@ project(":"){
 
         val isJson = metaJson.asFile.exists()
         val usedMeta = if(isJson) metaJson else metaHjson
-        inputs.files(usedMeta)
 
         from(
             files(sourceSets["main"].output.classesDirs),
@@ -211,17 +206,16 @@ project(":"){
 
             files(layout.projectDirectory.dir("assets")),
             layout.projectDirectory.file("icon.png"),
-            meta
+            usedMeta
         )
 
         metaInf.from(layout.projectDirectory.file("LICENSE"))
-        doFirst{
-            val map = usedMeta.asFile
-                .reader(Charsets.UTF_8)
-                .use{Jval.read(it)}
 
-            map.put("name", localModName)
-            meta.asFile.writer(Charsets.UTF_8).use{file -> BufferedWriter(file).use{map.writeTo(it, Jval.Jformat.formatted)}}
+        val localModName = modName
+        doFirst{
+            if(usedMeta.asFile.reader(Charsets.UTF_8).use{Jval.read(it)}.getString("name") != localModName) {
+                throw GradleException("Mod name mismatch in `${usedMeta.asFile.name}`; please synchronize with `gradle.properties`")
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 {
+    "name": "mod-template",
     "displayName": "Mod Template",
     "description": "Mindustry Java mod template, complete with EntityAnno integration.",
     "version": "v1.0",
