@@ -1,6 +1,5 @@
 import arc.files.Fi
 import arc.util.OS
-import arc.util.serialization.Jval
 import ent.EntityAnnoExtension
 import java.io.FileOutputStream
 import java.util.jar.JarEntry
@@ -51,7 +50,6 @@ val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
 val entVersion = providers.gradleProperty("entVersion").get()
 
 val mindustry = if(mindustryVersion == "be") "MindustryBuilds" else "Mindustry"
-val modName = providers.gradleProperty("modName").get()
 val modArtifact = providers.gradleProperty("modArtifact").get()
 val modFetch = providers.gradleProperty("modFetch").get()
 val modGenSrc = providers.gradleProperty("modGenSrc").get()
@@ -162,10 +160,8 @@ allprojects{
 project(":"){
     apply(plugin = "com.github.GglLfr.EntityAnno")
 
-    val localModName = modName
     val localMindustryVersion = mindustryVersion
     configure<EntityAnnoExtension>{
-        modName = localModName
         mindustryVersion = localMindustryVersion
         revisionDir = layout.projectDirectory.dir("revisions").asFile
         fetchPackage = modFetch
@@ -210,13 +206,6 @@ project(":"){
         )
 
         metaInf.from(layout.projectDirectory.file("LICENSE"))
-
-        val localModName = modName
-        doFirst{
-            if(usedMeta.asFile.reader(Charsets.UTF_8).use{Jval.read(it)}.getString("name") != localModName) {
-                throw GradleException("Mod name mismatch in `${usedMeta.asFile.name}`; please synchronize with `gradle.properties`")
-            }
-        }
     }
 
     val dex = tasks.register<Jar>("dex"){
