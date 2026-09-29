@@ -261,7 +261,6 @@ project(":"){
 
         buildNumber.set(versionProperties.getProperty("build"))
         buildType.set(versionProperties.getProperty("type"))
-        clientFile.set(layout.buildDirectory.file("Mindustry.jar"))
     }
 
     tasks.register<RunClientTask>("run"){
@@ -295,7 +294,9 @@ abstract class TrimSources : TransformAction<TransformParameters.None>{
     }
 }
 
-abstract class InstallClientTask : DefaultTask(){
+abstract class InstallClientTask @Inject constructor(
+    private val layout: ProjectLayout
+) : DefaultTask(){
     @get:Input
     abstract val buildNumber: Property<String>
 
@@ -304,6 +305,10 @@ abstract class InstallClientTask : DefaultTask(){
 
     @get:OutputFile
     abstract val clientFile: RegularFileProperty
+
+    init{
+        clientFile.convention(buildNumber.flatMap{num -> buildType.flatMap{type -> layout.buildDirectory.file("Mindustry-$type-$num.jar")}})
+    }
 
     @TaskAction
     fun install(){
