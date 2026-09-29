@@ -226,8 +226,8 @@ project(":"){
         doFirst{
             // Find Android SDK root.
             val sdkRoot = File(
-                OS.env("ANDROID_SDK_ROOT") ?: OS.env("ANDROID_HOME")
-                ?: throw IllegalStateException("Neither `ANDROID_SDK_ROOT` nor `ANDROID_HOME` is set.")
+                OS.env("ANDROID_HOME") ?: OS.env("ANDROID_SDK_ROOT")
+                ?: throw IllegalStateException("Neither `ANDROID_HOME` nor `ANDROID_SDK_ROOT` is set.")
             )
 
             // Find `d8`.
