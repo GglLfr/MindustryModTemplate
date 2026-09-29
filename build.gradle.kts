@@ -7,8 +7,11 @@ import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 
 buildscript{
-    val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
-    val mindustry = if(mindustryVersion == "be") "MindustryBuilds" else "Mindustry"
+    val (mindustry, mindustryVersion) = when(val version = providers.gradleProperty("mindustryVersion").get()){
+        "latest" -> "Mindustry" to "latest"
+        "be" -> "MindustryBuilds" to "latest"
+        else -> "Mindustry" to version
+    }
 
     dependencies{
         classpath("Anuken:$mindustry:$mindustryVersion")
@@ -46,22 +49,17 @@ plugins{
     id("com.github.GglLfr.EntityAnno") apply false
 }
 
-val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
+val (mindustry, mindustryVersion) = when(val version = providers.gradleProperty("mindustryVersion").get()){
+    "latest" -> "Mindustry" to "latest"
+    "be" -> "MindustryBuilds" to "latest"
+    else -> "Mindustry" to version
+}
 val entVersion = providers.gradleProperty("entVersion").get()
 
-val mindustry = if(mindustryVersion == "be") "MindustryBuilds" else "Mindustry"
 val modArtifact = providers.gradleProperty("modArtifact").get()
 val modFetch = providers.gradleProperty("modFetch").get()
 val modGenSrc = providers.gradleProperty("modGenSrc").get()
 val modGen = providers.gradleProperty("modGen").get()
-
-fun mindustry(): String{
-    return "Anuken:$mindustry:$mindustryVersion"
-}
-
-fun entity(module: String): String{
-    return "com.github.GglLfr.EntityAnno$module:$entVersion"
-}
 
 allprojects{
     apply(plugin = "java")
@@ -171,10 +169,10 @@ project(":"){
 
     dependencies{
         // Use the entity generation annotation processor.
-        compileOnly(entity(":entity"))
-        annotationProcessor(entity(":entity"))
+        compileOnly("com.github.GglLfr.EntityAnno:entity:$entVersion")
+        annotationProcessor("com.github.GglLfr.EntityAnno:entity:$entVersion")
 
-        compileOnly(mindustry())
+        compileOnly("Anuken:$mindustry:$mindustryVersion")
     }
 
     val jar = tasks.named<Jar>("jar"){
@@ -229,7 +227,7 @@ project(":"){
             // Find Android SDK root.
             val sdkRoot = File(
                 OS.env("ANDROID_HOME") ?: OS.env("ANDROID_SDK_ROOT")
-                ?: throw IllegalStateException("Neither `ANDROID_HOME` nor `ANDROID_SDK_ROOT` is set.")
+                ?: throw IllegalStateException("Neither `ANDROID_HOME` nor `ANDROID_SDK_ROOT` are set.")
             )
 
             // Find `d8`.
