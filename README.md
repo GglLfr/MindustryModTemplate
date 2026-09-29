@@ -101,9 +101,6 @@ Before going into using this template, be aware that a fair amount of Java knowl
    `gradle.properties`:
    ```diff
      ##### Project configurations.
-     # The mod's internal name, corresponds to `name` in `mod.json`.
-   - modName = mod-template
-   + modName = confictura
      # The mod's fetched entity sources package.
    - modFetch = template.fetched
    + modFetch = confictura.fetched
