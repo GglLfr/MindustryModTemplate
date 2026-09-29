@@ -1,16 +1,15 @@
-import arc.files.Fi
-import arc.util.OS
-import ent.EntityAnnoExtension
+import arc.util.*
+import ent.*
+import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.jar.JarEntry
-import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
+import java.util.*
+import java.util.jar.*
 
 buildscript{
-    val (mindustry, mindustryVersion) = when(val version = providers.gradleProperty("mindustryVersion").get()){
-        "latest" -> "Mindustry" to "latest"
-        "be" -> "MindustryBuilds" to "latest"
-        else -> "Mindustry" to version
+    val (mindustry, mindustryVersion, mindustrySource) = when(val version = providers.gradleProperty("mindustryVersion").get()){
+        "latest" -> Triple("Mindustry", "latest", "Anuken/Mindustry/releases/latest/download/dependencies.jar")
+        "be" -> Triple("MindustryBuilds", "latest", "Anuken/MindustryBuilds/releases/download/master/latest.jar")
+        else -> Triple("Mindustry", version, "Anuken/Mindustry/releases/download/[revision]/dependencies.jar")
     }
 
     dependencies{
@@ -30,11 +29,7 @@ buildscript{
         ivy{
             url = uri("https://github.com")
             patternLayout{
-                artifact(when(mindustryVersion){
-                    "latest" -> "Anuken/Mindustry/releases/latest/download/dependencies.jar"
-                    "be" -> "Anuken/MindustryBuilds/releases/download/master/latest.jar"
-                    else -> "Anuken/Mindustry/releases/download/[revision]/dependencies.jar"
-                })
+                artifact(mindustrySource)
                 metadataSources{artifact()}
             }
             content{
@@ -49,10 +44,10 @@ plugins{
     id("com.github.GglLfr.EntityAnno") apply false
 }
 
-val (mindustry, mindustryVersion) = when(val version = providers.gradleProperty("mindustryVersion").get()){
-    "latest" -> "Mindustry" to "latest"
-    "be" -> "MindustryBuilds" to "latest"
-    else -> "Mindustry" to version
+val (mindustry, mindustryVersion, mindustrySource) = when(val version = providers.gradleProperty("mindustryVersion").get()){
+    "latest" -> Triple("Mindustry", "latest", "Anuken/Mindustry/releases/latest/download/dependencies.jar")
+    "be" -> Triple("MindustryBuilds", "latest", "Anuken/MindustryBuilds/releases/download/master/latest.jar")
+    else -> Triple("Mindustry", version, "Anuken/Mindustry/releases/download/[revision]/dependencies.jar")
 }
 val entVersion = providers.gradleProperty("entVersion").get()
 
@@ -61,34 +56,13 @@ val modFetch = providers.gradleProperty("modFetch").get()
 val modGenSrc = providers.gradleProperty("modGenSrc").get()
 val modGen = providers.gradleProperty("modGen").get()
 
+val steam = providers.gradleProperty("mindustry.steam").getOrElse("true").toBoolean()
+
 allprojects{
     apply(plugin = "java")
     sourceSets["main"].java.setSrcDirs(listOf(layout.projectDirectory.dir("src")))
 
     dependencies{
-        abstract class TrimSources : TransformAction<TransformParameters.None>{
-            @get:InputArtifact
-            abstract val file: Provider<FileSystemLocation>
-
-            override fun transform(outputs: TransformOutputs){
-                val input = file.get().asFile
-                val classes = outputs.file(input.name)
-
-                JarFile(input).use{jar ->
-                    val entries = jar.entries()
-                    JarOutputStream(FileOutputStream(classes)).use{classes ->
-                        for(entry in entries){
-                            if(entry.name.endsWith(".java")) continue
-
-                            classes.putNextEntry(JarEntry(entry.name))
-                            jar.getInputStream(entry).use{it.copyTo(classes)}
-                            classes.closeEntry()
-                        }
-                    }
-                }
-            }
-        }
-
         registerTransform(TrimSources::class){
             from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE)
             to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-stripped")
@@ -115,11 +89,7 @@ allprojects{
         ivy{
             url = uri("https://github.com")
             patternLayout{
-                artifact(when(mindustryVersion){
-                    "latest" -> "Anuken/Mindustry/releases/latest/download/dependencies.jar"
-                    "be" -> "Anuken/MindustryBuilds/releases/download/master/latest.jar"
-                    else -> "Anuken/Mindustry/releases/download/[revision]/dependencies.jar"
-                })
+                artifact(mindustrySource)
                 metadataSources{artifact()}
             }
             content{
@@ -255,22 +225,146 @@ project(":"){
         }
     }
 
-    tasks.register<DefaultTask>("install"){
+    val install = tasks.register<DefaultTask>("install"){
         description = "Installs the desktop JAR to your `mods/` folder."
-        inputs.files(jar)
 
         val desktopJar = jar.flatMap{it.archiveFile}
         val dexJar = dex.flatMap{it.archiveFileName}
+
+        val folder = File(File(OS.getAppDataDirectoryString("Mindustry")), "mods")
+        val output = desktopJar.map{File(folder, it.asFile.name)}
+
+        inputs.files(desktopJar)
+        outputs.files(output)
+
         doLast{
-            val folder = Fi.get(OS.getAppDataDirectoryString("Mindustry")).child("mods")
-            folder.mkdirs()
+            folder.parentFile?.mkdirs()
+            File(folder, dexJar.get()).delete()
 
             val input = desktopJar.get().asFile
-            folder.child(input.name).delete()
-            folder.child(dexJar.get()).delete()
-            Fi(input).copyTo(folder)
+            val output = output.get()
+
+            FileInputStream(input).use{input -> FileOutputStream(output).use{output -> input.copyTo(output)}}
 
             logger.lifecycle("Copied :jar output to $folder.")
+        }
+    }
+
+    val installClient = tasks.register<InstallClientTask>("installClient"){
+        description = "Installs a Mindustry client compatible with `mindustryVersion` from `gradle.properties`."
+
+        val versionProperties = buildscript.classLoader.getResourceAsStream("version.properties").use{
+            val props = Properties()
+            props.load(it)
+            props
+        }
+
+        buildNumber.set(versionProperties.getProperty("build"))
+        buildType.set(versionProperties.getProperty("type"))
+        clientFile.set(layout.buildDirectory.file("Mindustry.jar"))
+    }
+
+    tasks.register<RunClientTask>("run"){
+        description = "Installs the mod and runs Mindustry."
+        dependsOn(install)
+
+        clientFile.set(installClient.flatMap{it.clientFile})
+    }
+}
+
+abstract class TrimSources : TransformAction<TransformParameters.None>{
+    @get:InputArtifact
+    abstract val file: Provider<FileSystemLocation>
+
+    override fun transform(outputs: TransformOutputs){
+        val input = file.get().asFile
+        val classes = outputs.file(input.name)
+
+        JarFile(input).use{jar ->
+            val entries = jar.entries()
+            JarOutputStream(FileOutputStream(classes)).use{classes ->
+                for(entry in entries){
+                    if(entry.name.endsWith(".java")) continue
+
+                    classes.putNextEntry(JarEntry(entry.name))
+                    jar.getInputStream(entry).use{it.copyTo(classes)}
+                    classes.closeEntry()
+                }
+            }
+        }
+    }
+}
+
+abstract class InstallClientTask : DefaultTask(){
+    @get:Input
+    abstract val buildNumber: Property<String>
+
+    @get:Input
+    abstract val buildType: Property<String>
+
+    @get:OutputFile
+    abstract val clientFile: RegularFileProperty
+
+    @TaskAction
+    fun install(){
+        logger.lifecycle("Installing client...")
+
+        val dest = clientFile.get().asFile
+        dest.parentFile?.mkdirs()
+
+        val num = buildNumber.get()
+        val type = buildType.get()
+        Http.get(when(type){
+            "official" -> "https://github.com/Anuken/Mindustry/releases/download/v$num/Mindustry.jar"
+            "bleeding-edge" -> "https://github.com/Anuken/MindustryBuilds/releases/download/$num/Mindustry-BE-Desktop-$num.jar"
+            else -> {
+                throw GradleException("Invalid Mindustry version type `$type`; cannot install and run client from Gradle")
+            }
+        })
+            .error{throw GradleException("Couldn't install client", it)}
+            .block{
+                val totalBytes = it.contentLength
+                it.resultAsStream.use{input ->
+                    FileOutputStream(dest).use{output ->
+                        val buf = ByteArray(65536)
+                        var totalRead = 0
+
+                        print("Downloading client file...")
+                        while(true){
+                            System.out.flush()
+
+                            val read = input.read(buf)
+                            if(read == -1) break
+
+                            output.write(buf, 0, read)
+                            totalRead += read
+
+                            print("\rDownloading client file: " +
+                                "${"%.2f".format(totalRead / (1024f * 1024f))} MiB / " +
+                                "${"%.2f".format(totalBytes / (1024f * 1024f))} MiB " +
+                                "(${"%.0f".format((totalRead * 100f) / totalBytes)}%)"
+                            )
+                        }
+                        println()
+                    }
+                }
+            }
+
+        logger.lifecycle("Installed $type client version $num!")
+    }
+}
+
+abstract class RunClientTask @Inject constructor(
+    private val execOperations: ExecOperations
+) : DefaultTask(){
+    @get:InputFile
+    abstract val clientFile: RegularFileProperty
+
+    @TaskAction
+    fun run(){
+        execOperations.javaexec{
+            classpath(clientFile)
+            mainClass = "mindustry.desktop.DesktopLauncher"
         }
     }
 }
