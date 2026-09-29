@@ -209,7 +209,9 @@ project(":"){
     }
 
     val dex = tasks.register<Jar>("dex"){
+        description = "Builds an Android-compatible JAR from the desktop-only JAR. Use this file for GitHub release."
         inputs.files(jar)
+
         archiveFileName = "$modArtifact.jar"
 
         val desktopJar = jar.flatMap{it.archiveFile}
@@ -256,6 +258,7 @@ project(":"){
     }
 
     tasks.register<DefaultTask>("install"){
+        description = "Installs the desktop JAR to your `mods/` folder."
         inputs.files(jar)
 
         val desktopJar = jar.flatMap{it.archiveFile}
