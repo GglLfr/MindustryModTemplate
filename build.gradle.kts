@@ -146,7 +146,6 @@ project(":"){
     val client = gradle.sharedServices.registerIfAbsent(MindustryClientPlugin.serviceName, MindustryClientService::class.java){}
     val jar = tasks.named<Jar>("jar"){
         archiveFileName = "${modArtifact}Desktop.jar"
-
         from(
             files(sourceSets["main"].output.classesDirs),
             files(sourceSets["main"].output.resourcesDir),
