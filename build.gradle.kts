@@ -147,21 +147,6 @@ project(":"){
     val jar = tasks.named<Jar>("jar"){
         archiveFileName = "${modArtifact}Desktop.jar"
 
-        // Deliberately check if the mod meta is actually written in HJSON, since, well, some people actually use
-        // it. But this is also not mentioned in the `README.md`, for the mischievous reason of driving beginners
-        // into using JSON instead.
-        val metaJson = layout.projectDirectory.file("mod.json")
-        val metaHjson = layout.projectDirectory.file("mod.hjson")
-
-        if(metaJson.asFile.exists() && metaHjson.asFile.exists()){
-            throw IllegalStateException("Ambiguous mod meta: both `mod.json` and `mod.hjson` exist.")
-        }else if(!metaJson.asFile.exists() && !metaHjson.asFile.exists()){
-            throw IllegalStateException("Missing mod meta: neither `mod.json` nor `mod.hjson` exist.")
-        }
-
-        val isJson = metaJson.asFile.exists()
-        val usedMeta = if(isJson) metaJson else metaHjson
-
         from(
             files(sourceSets["main"].output.classesDirs),
             files(sourceSets["main"].output.resourcesDir),
@@ -169,7 +154,9 @@ project(":"){
 
             files(layout.projectDirectory.dir("assets")),
             layout.projectDirectory.file("icon.png"),
-            usedMeta
+            // Check both JSON and HJSON.
+            layout.projectDirectory.file("mod.json"),
+            layout.projectDirectory.file("mod.hjson")
         )
 
         metaInf.from(layout.projectDirectory.file("LICENSE"))
