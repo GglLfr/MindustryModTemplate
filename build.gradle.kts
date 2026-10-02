@@ -75,10 +75,8 @@ allprojects{
                 useTarget("Anuken:$mindustry:$mindustryVersion")
             }
         }
-    }
 
-    configurations.matching{it.isCanBeResolved}.configureEach{
-        attributes{
+        if(isCanBeResolved) attributes{
             attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar-stripped")
         }
     }
@@ -129,7 +127,7 @@ project(":"){
     apply(plugin = "com.github.GglLfr.MindustryClient")
 
     configure<EntityAnnoExtension>{
-        revisionDir = layout.projectDirectory.dir("revisions").asFile
+        revisionDir = layout.projectDirectory.dir("revisions")
         fetchPackage = modFetch
         genSrcPackage = modGenSrc
         genPackage = modGen
@@ -163,18 +161,20 @@ project(":"){
 
     val dex = tasks.register<Jar>("dex"){
         description = "Builds an Android-compatible JAR from the desktop-only JAR. Use this file for GitHub release."
-        inputs.files(jar)
-
-        archiveFileName = "$modArtifact.jar"
-
-        val desktopJar = jar.flatMap{it.archiveFile}
-        val dexJar = File(temporaryDir, "Dex.jar")
 
         val androidSdkVersion = providers.gradleProperty("androidSdkVersion").get()
         val androidBuildVersion = providers.gradleProperty("androidBuildVersion").get()
         val androidMinVersion = providers.gradleProperty("androidMinVersion").get()
 
-        val classpaths = configurations.compileClasspath.get().toList() + configurations.runtimeClasspath.get().toList()
+        val classpaths = files(configurations.compileClasspath, configurations.runtimeClasspath)
+        inputs.files(jar)
+        inputs.files(classpaths)
+        inputs.property("androidSdk", "$androidSdkVersion+$androidBuildVersion+$androidMinVersion")
+
+        archiveFileName = "$modArtifact.jar"
+
+        val desktopJar = jar.flatMap{it.archiveFile}
+        val dexJar = File(temporaryDir, "Dex.jar")
         val providers = project.providers
 
         from(zipTree(desktopJar), zipTree(dexJar))
@@ -220,7 +220,7 @@ project(":"){
         inputs.files(desktopJar)
         doLast{
             val mods = client.get().detected.modsDirectory
-            mods.parentFile?.mkdirs()
+            mods.mkdirs()
             mods.resolve(dexJar.get()).delete()
 
             val input = desktopJar.get().asFile
