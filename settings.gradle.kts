@@ -3,11 +3,15 @@ pluginManagement{
         gradlePluginPortal()
         mavenLocal()
         maven("https://raw.githubusercontent.com/GglLfr/EntityAnnoMaven/main")
+        maven("https://raw.githubusercontent.com/GglLfr/MindustryClient/main")
     }
 
     plugins{
         val entVersion = providers.gradleProperty("entVersion").get()
+        val clientVersion = providers.gradleProperty("clientVersion").get()
+
         id("com.github.GglLfr.EntityAnno") version(entVersion)
+        id("com.github.GglLfr.MindustryClient") version(clientVersion)
     }
 }
 

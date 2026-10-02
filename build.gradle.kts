@@ -1,10 +1,8 @@
 import arc.util.*
 import ent.*
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.IOException
-import java.io.Serializable
-import java.util.*
+import mindustry.client.*
+import mindustry.client.service.*
+import mindustry.client.task.*
 import java.util.jar.*
 
 buildscript{
@@ -44,6 +42,7 @@ buildscript{
 plugins{
     java
     id("com.github.GglLfr.EntityAnno") apply false
+    id("com.github.GglLfr.MindustryClient") apply false
 }
 
 val (mindustry, mindustryVersion, mindustrySource) = when(val version = providers.gradleProperty("mindustryVersion").get()){
@@ -57,14 +56,6 @@ val modArtifact = providers.gradleProperty("modArtifact").get()
 val modFetch = providers.gradleProperty("modFetch").get()
 val modGenSrc = providers.gradleProperty("modGenSrc").get()
 val modGen = providers.gradleProperty("modGen").get()
-
-val mindustryIgnoreSteam = providers.gradleProperty("mindustryIgnoreSteam").orElse("false").map{it.toBoolean()}
-val mindustryPath = providers.gradleProperty("mindustryPath").map(::File)
-
-val clientProvider = gradle.sharedServices.registerIfAbsent("clientService", ClientService::class.java){
-    parameters.ignoreSteam = mindustryIgnoreSteam
-    parameters.path = mindustryPath
-}
 
 allprojects{
     apply(plugin = "java")
@@ -135,6 +126,7 @@ allprojects{
 
 project(":"){
     apply(plugin = "com.github.GglLfr.EntityAnno")
+    apply(plugin = "com.github.GglLfr.MindustryClient")
 
     configure<EntityAnnoExtension>{
         revisionDir = layout.projectDirectory.dir("revisions").asFile
@@ -151,6 +143,7 @@ project(":"){
         compileOnly("Anuken:$mindustry:$mindustryVersion")
     }
 
+    val client = gradle.sharedServices.registerIfAbsent(MindustryClientPlugin.serviceName, MindustryClientService::class.java){}
     val jar = tasks.named<Jar>("jar"){
         archiveFileName = "${modArtifact}Desktop.jar"
 
@@ -231,46 +224,29 @@ project(":"){
         }
     }
 
-    val client = clientProvider.map{it.detected}
     val install = tasks.register<DefaultTask>("install"){
         description = "Installs the desktop JAR to your `mods/` folder."
+        usesService(client)
 
         val desktopJar = jar.flatMap{it.archiveFile}
         val dexJar = dex.flatMap{it.archiveFileName}
 
         inputs.files(desktopJar)
-
         doLast{
-            val mods = client.get().getModsDirectory()
+            val mods = client.get().detected.modsDirectory
             mods.parentFile?.mkdirs()
             mods.resolve(dexJar.get()).delete()
 
             val input = desktopJar.get().asFile
             val output = mods.resolve(input.name)
-            FileInputStream(input).use{input -> FileOutputStream(output).use{output -> input.copyTo(output)}}
+            input.copyTo(output, overwrite = true)
 
             logger.lifecycle("Copied :jar output to ${mods}.")
         }
     }
 
-    val installClient = tasks.register<InstallClientTask>("installClient"){
-        description = "Installs a Mindustry client compatible with `mindustryVersion` from `gradle.properties`."
-
-        val versionProperties = buildscript.classLoader.getResourceAsStream("version.properties").use{
-            val props = Properties()
-            props.load(it)
-            props
-        }
-
-        buildNumber.set(versionProperties.getProperty("build"))
-        buildType.set(versionProperties.getProperty("type"))
-    }
-
-    tasks.register<RunClientTask>("run"){
-        description = "Installs the mod and runs Mindustry."
+    tasks.withType<RunClientTask>().configureEach{
         dependsOn(install)
-
-        clientClasspaths.from(installClient.flatMap{it.clientFile})
     }
 }
 
@@ -284,7 +260,7 @@ abstract class TrimSources : TransformAction<TransformParameters.None>{
 
         JarFile(input).use{jar ->
             val entries = jar.entries()
-            JarOutputStream(FileOutputStream(classes)).use{classes ->
+            classes.outputStream().use{JarOutputStream(it).use{classes ->
                 for(entry in entries){
                     if(entry.name.endsWith(".java")) continue
 
@@ -292,253 +268,7 @@ abstract class TrimSources : TransformAction<TransformParameters.None>{
                     jar.getInputStream(entry).use{it.copyTo(classes)}
                     classes.closeEntry()
                 }
-            }
-        }
-    }
-}
-
-data class ClientInfo(
-    var ignoreSteam: Boolean,
-    // `[...]/steamapps/common/Mindustry` directory.
-    var steamPath: File?,
-    // `Mindustry[.exe|.app]` executable path.
-    var path: File?,
-    var dataDirectory: File
-) : Serializable{
-    fun getModsDirectory(): File = dataDirectory.resolve("mods")
-
-    fun isSteam(): Boolean = steamPath != null && (!ignoreSteam || steamPath?.absoluteFile?.let{path?.absoluteFile?.startsWith(it)} ?: false);
-}
-
-interface ClientParams : BuildServiceParameters{
-    val ignoreSteam: Property<Boolean>
-    val path: Property<File>
-}
-
-abstract class ClientService : BuildService<ClientParams>{
-    private val logger = Logging.getLogger(ClientService::class.java)
-    val detected = detectClient(parameters.ignoreSteam.get(), parameters.path.orNull)
-
-    fun detectClient(ignoreSteam: Boolean, path: File?): ClientInfo{
-        val steamDirs = mutableListOf<File>()
-        val dataFolder = File(OS.getAppDataDirectoryString("Mindustry"))
-        val out = ClientInfo(ignoreSteam, null, null, dataFolder)
-
-        if(OS.isWindows){
-            steamDirs.add(File("/Program Files (x86)/Steam"))
-            steamDirs.add(File("/Program Files/Steam"))
-
-            OS.env("PROGRAMFILES(X86)")?.let{steamDirs.add(File(it, "Steam")) }
-            OS.env("PROGRAMFILES")?.let{steamDirs.add(File(it, "Steam")) }
-        }else if(OS.isMac){
-            steamDirs.add(File(OS.userHome, "Library/Application Support/Steam"))
-        }else if(OS.isLinux){
-            steamDirs.add(File(OS.userHome, ".local/share/Steam"))
-            steamDirs.add(File(OS.userHome, ".steam/steam"))
-            steamDirs.add(File(OS.userHome, ".var/app/com.valvesoftware.Steam/.local/share/Steam"))
-        }
-
-        val steamRoot = steamDirs.firstOrNull{it.exists()}
-        if(steamRoot != null){
-            val libraryPaths = mutableSetOf(steamRoot.resolve("steamapps"))
-            val vdfFile = steamRoot.resolve("steamapps/libraryfolders.vdf")
-            if(vdfFile.exists()){
-                try{
-                    """"path"\s+"([^"]+)"""".toRegex().findAll(vdfFile.readText(Charsets.UTF_8)).forEach{match ->
-                        val dir = File(match.groupValues[1].replace("\\\\", "\\"))
-                        if(dir.exists()) libraryPaths.add(dir.resolve("steamapps"))
-                    }
-                }catch(_: IOException){}
-            }
-
-            val steamPath = libraryPaths
-                .mapNotNull{steamapps ->
-                    val acf = steamapps.resolve("appmanifest_1127400.acf")
-                    if(!acf.exists()) return@mapNotNull null
-
-                    val name = try{
-                        val match = """"installdir"\s+"([^"]+)"""".toRegex().find(acf.readText(Charsets.UTF_8))
-                        match?.groupValues[1] ?: return@mapNotNull null
-                    }catch(_: IOException){
-                        return@mapNotNull null
-                    }
-
-                    val dir = steamapps.resolve("common/$name")
-                    if(dir.exists()) dir else null
-                }.firstOrNull()
-
-            if(steamPath != null) {
-                if(!ignoreSteam) logger.lifecycle("Found a Steam Mindustry installation at `$steamPath`.")
-                out.steamPath = steamPath
-                out.dataDirectory = steamPath.resolve("saves")
-            }
-        }
-
-        if(path != null && (out.steamPath == null || ignoreSteam)) {
-            if(path.exists()){
-                val path = if(OS.isMac) path.resolve("Contents/MacOS/Mindustry") else path
-                logger.lifecycle("Using explicitly provided Mindustry executable at `$path`.")
-
-                out.path = path
-            }else{
-                logger.warn("Provided Mindustry executable path `$path` does not exist.")
-            }
-        }
-
-        if(!out.isSteam()) out.dataDirectory = dataFolder
-        return out
-    }
-
-    companion object {
-        fun isJar(file: File?): Boolean =
-            file != null && file.exists() && try{
-                JarFile(file).use{
-                    it.manifest?.mainAttributes?.getValue("Main-Class") == "mindustry.desktop.DesktopLauncher"
-                }
-            }catch(_: IOException){
-                false
-            }
-    }
-}
-
-abstract class InstallClientTask @Inject constructor(
-    layout: ProjectLayout
-) : DefaultTask(){
-    @get:Input
-    abstract val buildNumber: Property<String>
-    @get:Input
-    abstract val buildType: Property<String>
-    @get:Input
-    abstract val client: Property<ClientInfo>
-
-    @get:OutputFile
-    abstract val clientFile: RegularFileProperty
-
-    @get:ServiceReference("clientService")
-    abstract val clientService: Property<ClientService>
-
-    init{
-        clientFile.convention(buildNumber.flatMap{num -> buildType.flatMap{type -> layout.buildDirectory.file("clients/Mindustry-$type-$num.jar")}})
-        client.set(clientService.map{it.detected})
-        client.disallowChanges()
-    }
-
-    @TaskAction
-    fun install(){
-        val client = clientService.get().detected
-        if(client.path != null || !client.ignoreSteam && client.steamPath != null) return
-
-        val dest = clientFile.get().asFile
-        dest.parentFile?.mkdirs()
-
-        if(dest.exists() && ClientService.isJar(dest)) return
-        logger.lifecycle("Installing client...")
-
-        val num = buildNumber.get()
-        val type = buildType.get()
-        Http.get(when(type){
-            "official" -> "https://github.com/Anuken/Mindustry/releases/download/v$num/Mindustry.jar"
-            "bleeding-edge" -> "https://github.com/Anuken/MindustryBuilds/releases/download/$num/Mindustry-BE-Desktop-$num.jar"
-            else -> {
-                throw GradleException("Invalid Mindustry version type `$type`; cannot install and run client from Gradle")
-            }
-        })
-            .error{throw GradleException("Couldn't install client", it)}
-            .block{
-                val totalBytes = it.contentLength
-                it.resultAsStream.use{input ->
-                    FileOutputStream(dest).use{output ->
-                        val buf = ByteArray(65536)
-                        var totalRead = 0
-
-                        print("Downloading client file...")
-                        while(true){
-                            System.out.flush()
-
-                            val read = input.read(buf)
-                            if(read == -1) break
-
-                            output.write(buf, 0, read)
-                            totalRead += read
-
-                            print("\rDownloading client file: " +
-                                "${"%.2f".format(totalRead / (1024f * 1024f))} MiB / " +
-                                "${"%.2f".format(totalBytes / (1024f * 1024f))} MiB " +
-                                "(${"%.0f".format((totalRead * 100f) / totalBytes)}%)"
-                            )
-                        }
-                        println()
-                    }
-                }
-            }
-
-        logger.lifecycle("Installed $type client version $num!")
-    }
-}
-
-abstract class RunClientTask @Inject constructor(
-    private val execOperations: ExecOperations
-) : DefaultTask(){
-    @get:InputFiles
-    abstract val clientClasspaths: ConfigurableFileCollection
-    @get:Input
-    abstract val client: Property<ClientInfo>
-
-    @get:ServiceReference("clientService")
-    abstract val clientService: Property<ClientService>
-
-    init{
-        client.set(clientService.map{it.detected})
-        client.disallowChanges()
-    }
-
-    @TaskAction
-    fun run(){
-        val client = client.get()
-        val jvmArgs = arrayOf(
-            // Match the ones in native Mindustry client json file.
-            "-Dhttps.protocols=TLSv1.2,TLSv1.1,TLSv1",
-            "-XX:+ShowCodeDetailsInExceptionMessages",
-            "-XX:+UseCompactObjectHeaders",
-            "--enable-native-access=ALL-UNNAMED"
-        )
-
-        if(client.steamPath != null && (!client.ignoreSteam || client.steamPath?.absoluteFile?.let{client.path?.absoluteFile?.startsWith(it)} ?: false)){
-            logger.lifecycle("Running Mindustry via Steam, so stdin/stdout is not captured.")
-            logger.lifecycle("This Gradle task will exit immediately, but Mindustry is being run at the background.")
-            logger.lifecycle("Give Steam some time to boot Mindustry up.")
-
-            val uri = "steam://run/1127400"
-            execOperations.exec{
-                when{
-                    OS.isWindows -> commandLine("cmd", "/c", "start", uri)
-                    OS.isMac -> commandLine("open", uri)
-                    OS.isLinux -> commandLine("xdg-open", uri)
-                    else -> throw GradleException("Unsupported host OS ${OS.osName}")
-                }
-            }
-        }else if(client.path != null){
-            if(ClientService.isJar(client.path)){
-                execOperations.javaexec{
-                    mainClass = "mindustry.desktop.DesktopLauncher"
-                    classpath(client.path)
-                    jvmArgs(*jvmArgs)
-                }
-            }else{
-                execOperations.exec{
-                    when{
-                        OS.isWindows -> commandLine("cmd", "/c", client.path)
-                        OS.isMac || OS.isLinux -> commandLine(client.path)
-                        else -> throw GradleException("Unsupported host OS ${OS.osName}")
-                    }
-                }
-            }
-        }else{
-            execOperations.javaexec{
-                mainClass = "mindustry.desktop.DesktopLauncher"
-                classpath(clientClasspaths)
-                jvmArgs(*jvmArgs)
-            }
+            }}
         }
     }
 }
