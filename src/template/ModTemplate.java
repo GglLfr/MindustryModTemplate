@@ -1,6 +1,7 @@
 package template;
 
 import mindustry.mod.*;
+import template.content.*;
 import template.gen.*;
 
 public class ModTemplate extends Mod{
@@ -8,7 +9,7 @@ public class ModTemplate extends Mod{
     public void loadContent(){
         // Call this before loading any content!
         EntityRegistry.register();
-        // Call this *after* loading `UnitType`s!
-        EntityRegistry.registerUnits();
+
+        ModUnitTypes.load();
     }
 }

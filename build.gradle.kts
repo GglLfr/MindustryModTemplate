@@ -251,7 +251,7 @@ abstract class TrimSources : TransformAction<TransformParameters.None>{
                     if(entry.name.endsWith(".java")) continue
 
                     classes.putNextEntry(JarEntry(entry.name))
-                    jar.getInputStream(entry).use{it.copyTo(classes)}
+                    jar.getInputStream(entry).use{jar -> jar.copyTo(classes)}
                     classes.closeEntry()
                 }
             }}
