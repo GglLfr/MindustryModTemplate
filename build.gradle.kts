@@ -47,6 +47,7 @@ buildscript{
 
 plugins{
     java
+    id("com.github.GglLfr.AssetProc") apply false
     id("com.github.GglLfr.EntityAnno") apply false
     id("com.github.GglLfr.MindustryClient") apply false
 }
@@ -66,6 +67,11 @@ val modGen = providers.gradleProperty("modGen").get()
 allprojects{
     apply(plugin = "java")
     sourceSets["main"].java.setSrcDirs(listOf(layout.projectDirectory.dir("src")))
+
+    java{
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
     dependencies{
         registerTransform(TrimSources::class){
@@ -128,13 +134,11 @@ allprojects{
             isFork = false
             encoding = "UTF-8"
         }
-
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
     }
 }
 
 project(":"){
+    apply(plugin = "com.github.GglLfr.AssetProc")
     apply(plugin = "com.github.GglLfr.EntityAnno")
     apply(plugin = "com.github.GglLfr.MindustryClient")
 
@@ -155,6 +159,8 @@ project(":"){
 
     val client = gradle.sharedServices.registerIfAbsent(MindustryClientPlugin.serviceName, MindustryClientService::class.java){}
     val jar = tasks.named<Jar>("jar"){
+        dependsOn(tasks.named("processAssets"))
+
         archiveFileName = "${modArtifact}Desktop.jar"
         from(
             files(sourceSets["main"].output.classesDirs),
