@@ -7,7 +7,6 @@ pluginManagement{
     }
 
     plugins{
-        val assetVersion = providers.gradleProperty("assetVersion")
         val entVersion = providers.gradleProperty("entVersion")
         val clientVersion = providers.gradleProperty("clientVersion")
 
