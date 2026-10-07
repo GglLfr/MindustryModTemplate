@@ -47,7 +47,6 @@ buildscript{
 
 plugins{
     java
-    id("com.github.GglLfr.AssetProc") apply false
     id("com.github.GglLfr.EntityAnno") apply false
     id("com.github.GglLfr.MindustryClient") apply false
 }
@@ -138,7 +137,6 @@ allprojects{
 }
 
 project(":"){
-    apply(plugin = "com.github.GglLfr.AssetProc")
     apply(plugin = "com.github.GglLfr.EntityAnno")
     apply(plugin = "com.github.GglLfr.MindustryClient")
 
@@ -159,8 +157,6 @@ project(":"){
 
     val client = gradle.sharedServices.registerIfAbsent(MindustryClientPlugin.serviceName, MindustryClientService::class.java){}
     val jar = tasks.named<Jar>("jar"){
-        dependsOn(tasks.named("processAssets"))
-
         archiveFileName = "${modArtifact}Desktop.jar"
         from(
             files(sourceSets["main"].output.classesDirs),

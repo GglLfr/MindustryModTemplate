@@ -10,6 +10,3 @@ build/
 .idea/
 .vscode/
 .kateproject
-
-# Project-specific
-/assets/sprites
