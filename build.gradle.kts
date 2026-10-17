@@ -228,7 +228,7 @@ project(":"){
         dependsOn(dex)
 
         archiveFileName = "$modArtifact.jar"
-        from(zipTree(jar.flatMap{it.archiveFile}), dexOutput)
+        from(zipTree(jar.flatMap{it.archiveFile}), zipTree(dexOutput))
     }
 
     val install = tasks.register<DefaultTask>("install"){
